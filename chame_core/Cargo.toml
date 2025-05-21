@@ -1,0 +1,20 @@
+[package]
+name = "chame_core"
+version = "0.1.0"
+edition = "2021"
+description = "Core adaptive engine for CAMALEON"
+authors = ["CAMALEON Team"]
+repository = "https://github.com/servais1983/CAMALEON"
+license = "MIT"
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { version = "1.0" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = "0.1"
+tokio-util = "0.7"
+chrono = "0.4"
+dashmap = "5.5"
