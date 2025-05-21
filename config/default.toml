@@ -1,0 +1,43 @@
+# CAMALEON Default Configuration
+
+[general]
+log_level = "info"
+adaptive_mode = true
+default_posture = "neutral"
+
+[skinshift]
+enabled = true
+presets_dir = "./presets"
+rotation_interval = 3600  # seconds, 0 = disabled
+
+[eye360]
+enabled = true
+syscall_monitoring = true
+log_suspicious = true
+ebpf_enabled = false  # Requires root permissions
+
+[nettongue]
+enabled = true
+pcap_enabled = true
+interface = "eth0"  # Default interface, override in custom config
+latency_fuzz_enabled = false
+latency_fuzz_min_ms = 50
+latency_fuzz_max_ms = 200
+
+[lurefield]
+enabled = true
+honeypot_dir = "./honeypots"
+max_honeypots = 5
+auto_deploy = false
+
+[posture]
+change_threshold = 0.75  # Confidence level to trigger posture change
+service_rotation_enabled = false
+service_rotation_interval = 7200  # seconds
+postures = [
+    "silent",
+    "neutral",
+    "mimetic",
+    "fulgurant",
+    "unstable"
+]
