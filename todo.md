@@ -98,19 +98,19 @@
 
 #### Phase 3 : Modules avancés et intégration (3 semaines)
 1. **Module `lurefield` - Honeypots adaptatifs**
-   - Implémentation des micro-honeypots dynamiques
-   - Système de déploiement à la volée
-   - Tests et documentation
+   - [x] Implémentation des micro-honeypots dynamiques
+   - [x] Système de déploiement à la volée
+   - [ ] Tests et documentation
 
 2. **Module `pigment_api` - API de pilotage**
-   - Développement de l'API REST locale
-   - Interface de contrôle en temps réel
-   - Tests et documentation
+   - [x] Développement de l'API REST locale
+   - [x] Interface de contrôle en temps réel
+   - [ ] Tests et documentation
 
 3. **Module `cli` - Interface en ligne de commande complète**
-   - Finalisation de l'interface CLI
-   - Intégration avec tous les modules
-   - Tests et documentation
+   - [x] Finalisation de l'interface CLI
+   - [x] Intégration avec tous les modules
+   - [ ] Tests et documentation
 
 #### Phase 4 : Extensions et améliorations (3 semaines)
 1. **Support multi-formats pour l'analyse**

@@ -1,0 +1,24 @@
+[package]
+name = "pigment_api"
+version = "0.1.0"
+edition = "2021"
+description = "API locale pour pilotage en live de CAMALEON"
+authors = ["CAMALEON Team"]
+repository = "https://github.com/servais1983/CAMALEON"
+license = "MIT"
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { version = "1.0" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chame_core = { path = "../chame_core" }
+async-trait = "0.1"
+chrono = "0.4"
+axum = "0.6"
+tower = "0.4"
+tower-http = { version = "0.4", features = ["cors", "trace"] }
+hyper = "0.14"
+dashmap = "5.5"
