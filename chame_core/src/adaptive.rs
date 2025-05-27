@@ -1,193 +1,159 @@
-use crate::errors::ChameleonError;
-use crate::events::Event;
-use crate::state::ChameleonState;
-use crate::Posture;
+use crate::events::{Event, EventType, Severity};
+use async_trait::async_trait;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use thiserror::Error;
+use tokio::sync::{Mutex, RwLock};
 
-/// Adaptive behavior manager that evaluates and changes system posture
-pub struct AdaptiveManager {
-    /// Reference to the shared system state
-    state: Arc<RwLock<ChameleonState>>,
+/// Errors that can occur in the adaptive engine
+#[derive(Error, Debug)]
+pub enum AdaptiveError {
+    #[error("Handler not found: {0}")]
+    HandlerNotFound(String),
     
-    /// Minimum change threshold for posture adjustment
-    threshold: f64,
+    #[error("Event processing failed: {0}")]
+    ProcessingFailed(String),
+    
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
-impl AdaptiveManager {
-    /// Create a new adaptive manager
-    pub fn new(state: Arc<RwLock<ChameleonState>>) -> Self {
-        Self {
-            state,
-            threshold: 0.75, // Default threshold (can be configured)
-        }
-    }
+/// An event that triggers adaptive behavior
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdaptiveEvent {
+    /// Source of the event
+    pub source: String,
     
-    /// Set the threshold for posture changes
-    pub fn set_threshold(&mut self, threshold: f64) {
-        self.threshold = threshold.max(0.0).min(1.0);
-    }
+    /// Type of event
+    pub event_type: String,
     
-    /// Get the current threshold
-    pub fn threshold(&self) -> f64 {
-        self.threshold
-    }
+    /// Severity level (0-10)
+    pub severity: u8,
     
-    /// Evaluate whether a posture change is needed based on an event
-    pub async fn evaluate_posture_change(&self, event: &Event) -> Result<bool, ChameleonError> {
-        debug!("Evaluating posture change based on event: {:?}", event);
-        
-        // Get current state
-        let mut state = self.state.write().await;
-        let current_posture = state.current_posture;
-        let threat_level = state.threat_level;
-        
-        // Adjust threat level based on event
-        match event.severity() {
-            crate::events::Severity::Critical => state.increase_threat_level(0.4),
-            crate::events::Severity::High => state.increase_threat_level(0.2),
-            crate::events::Severity::Medium => state.increase_threat_level(0.1),
-            crate::events::Severity::Low => state.increase_threat_level(0.05),
-            crate::events::Severity::Info => {}
-        }
-        
-        // Evaluate if posture change is needed
-        let new_posture = self.determine_optimal_posture(state.threat_level);
-        
-        if new_posture != current_posture {
-            if self.should_change_posture(current_posture, new_posture, threat_level, state.threat_level) {
-                info!(
-                    "Changing posture from {:?} to {:?} (threat level: {:.2} -> {:.2})",
-                    current_posture, new_posture, threat_level, state.threat_level
-                );
-                
-                state.current_posture = new_posture;
-                state.last_posture_change = Some(chrono::Utc::now());
-                
-                drop(state); // Release the lock before returning
-                return Ok(true);
-            }
-        }
-        
-        drop(state); // Release the lock
-        Ok(false)
-    }
+    /// Additional data
+    pub data: serde_json::Value,
     
-    /// Determine the optimal posture based on the current threat level
-    fn determine_optimal_posture(&self, threat_level: f64) -> Posture {
-        match threat_level {
-            t if t < 0.2 => Posture::Neutral,
-            t if t < 0.4 => Posture::Silent,
-            t if t < 0.6 => Posture::Mimetic,
-            t if t < 0.8 => Posture::Fulgurant,
-            _ => Posture::Unstable,
-        }
-    }
-    
-    /// Decide whether a posture change should occur
-    fn should_change_posture(
-        &self,
-        current: Posture,
-        proposed: Posture,
-        old_threat: f64,
-        new_threat: f64,
-    ) -> bool {
-        // If the threat difference is significant, change regardless
-        if (new_threat - old_threat).abs() > self.threshold {
-            return true;
-        }
-        
-        // Check if we're escalating or de-escalating
-        let is_escalation = match (current, proposed) {
-            (Posture::Neutral, Posture::Silent) => true,
-            (Posture::Neutral, Posture::Mimetic) => true,
-            (Posture::Neutral, Posture::Fulgurant) => true,
-            (Posture::Neutral, Posture::Unstable) => true,
-            
-            (Posture::Silent, Posture::Mimetic) => true,
-            (Posture::Silent, Posture::Fulgurant) => true,
-            (Posture::Silent, Posture::Unstable) => true,
-            
-            (Posture::Mimetic, Posture::Fulgurant) => true,
-            (Posture::Mimetic, Posture::Unstable) => true,
-            
-            (Posture::Fulgurant, Posture::Unstable) => true,
-            
-            // De-escalation cases
-            (Posture::Silent, Posture::Neutral) => false,
-            (Posture::Mimetic, Posture::Neutral) => false,
-            (Posture::Mimetic, Posture::Silent) => false,
-            (Posture::Fulgurant, Posture::Neutral) => false,
-            (Posture::Fulgurant, Posture::Silent) => false,
-            (Posture::Fulgurant, Posture::Mimetic) => false,
-            (Posture::Unstable, Posture::Neutral) => false,
-            (Posture::Unstable, Posture::Silent) => false,
-            (Posture::Unstable, Posture::Mimetic) => false,
-            (Posture::Unstable, Posture::Fulgurant) => false,
-            
-            // Same posture (should never happen in this function)
-            _ => {
-                warn!("Unexpected posture comparison: {:?} vs {:?}", current, proposed);
-                false
-            }
+    /// When the event occurred
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<Event> for AdaptiveEvent {
+    fn from(event: Event) -> Self {
+        let severity = match event.severity() {
+            Severity::Critical => 10,
+            Severity::High => 8,
+            Severity::Medium => 5,
+            Severity::Low => 3,
+            Severity::Info => 1,
         };
         
-        // Be quicker to escalate than de-escalate
-        if is_escalation {
-            // Escalate more readily
-            new_threat > old_threat && new_threat > 0.3
-        } else {
-            // De-escalate more cautiously
-            new_threat < old_threat && (old_threat - new_threat) > 0.2
+        Self {
+            source: event.source,
+            event_type: match &event.event_type {
+                EventType::Custom(name) => name.clone(),
+                other => format!("{:?}", other),
+            },
+            severity,
+            data: event.data.unwrap_or(serde_json::json!({})),
+            timestamp: event.timestamp,
         }
     }
+}
+
+/// Handler for adaptive events
+#[async_trait]
+pub trait AdaptiveHandler: Send + Sync {
+    /// Handle an adaptive event
+    async fn handle_event(&mut self, event: &AdaptiveEvent) -> Result<(), AdaptiveError>;
+}
+
+/// Engine that processes adaptive events and triggers appropriate responses
+pub struct AdaptiveEngine {
+    /// Registered handlers
+    pub handlers: RwLock<HashMap<String, Arc<Mutex<dyn AdaptiveHandler>>>>,
     
-    /// Manually force a specific posture
-    pub async fn force_posture(&self, posture: Posture) -> Result<(), ChameleonError> {
-        let mut state = self.state.write().await;
-        info!(
-            "Manually forcing posture change from {:?} to {:?}",
-            state.current_posture, posture
-        );
+    /// Event history
+    pub history: RwLock<Vec<AdaptiveEvent>>,
+    
+    /// Maximum history size
+    pub max_history: usize,
+}
+
+impl AdaptiveEngine {
+    /// Create a new adaptive engine
+    pub fn new() -> Result<Self, AdaptiveError> {
+        Ok(Self {
+            handlers: RwLock::new(HashMap::new()),
+            history: RwLock::new(Vec::new()),
+            max_history: 1000,
+        })
+    }
+    
+    /// Register a handler for adaptive events
+    pub async fn register_handler(
+        &mut self,
+        name: impl Into<String>,
+        handler: Arc<Mutex<dyn AdaptiveHandler>>,
+    ) {
+        let mut handlers = self.handlers.write().await;
+        handlers.insert(name.into(), handler);
+    }
+    
+    /// Process an adaptive event
+    pub async fn process_event(&self, event: AdaptiveEvent) -> Result<(), AdaptiveError> {
+        // Add to history
+        {
+            let mut history = self.history.write().await;
+            history.push(event.clone());
+            
+            // Trim history if needed
+            if history.len() > self.max_history {
+                history.remove(0);
+            }
+        }
         
-        state.current_posture = posture;
-        state.last_posture_change = Some(chrono::Utc::now());
+        // Process with all handlers
+        let handlers = self.handlers.read().await;
+        for (name, handler) in handlers.iter() {
+            let mut handler_lock = handler.lock().await;
+            if let Err(e) = handler_lock.handle_event(&event).await {
+                return Err(AdaptiveError::ProcessingFailed(format!(
+                    "Handler '{}' failed: {}",
+                    name, e
+                )));
+            }
+        }
         
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::events::{Event, EventType};
     
-    #[tokio::test]
-    async fn test_threat_escalation() {
-        let state = Arc::new(RwLock::new(ChameleonState::new()));
-        let manager = AdaptiveManager::new(state.clone());
-        
-        // Initial state
-        {
-            let mut state = state.write().await;
-            state.current_posture = Posture::Neutral;
-            state.threat_level = 0.1;
+    /// Get the event history
+    pub async fn get_history(&self) -> Vec<AdaptiveEvent> {
+        let history = self.history.read().await;
+        history.clone()
+    }
+    
+    /// Clear the event history
+    pub async fn clear_history(&self) {
+        let mut history = self.history.write().await;
+        history.clear();
+    }
+    
+    /// Create an adaptive event from components
+    pub fn create_event(
+        source: impl Into<String>,
+        event_type: impl Into<String>,
+        severity: u8,
+        data: serde_json::Value,
+    ) -> AdaptiveEvent {
+        AdaptiveEvent {
+            source: source.into(),
+            event_type: event_type.into(),
+            severity,
+            data,
+            timestamp: Utc::now(),
         }
-        
-        // Create a high severity event
-        let event = Event::security_alert(
-            "test",
-            Some(serde_json::json!({"alert": "High severity test"})),
-        );
-        
-        // Evaluate
-        let changed = manager.evaluate_posture_change(&event).await.unwrap();
-        
-        // Check that the posture has changed and threat level increased
-        let state = state.read().await;
-        assert!(changed);
-        assert_eq!(state.current_posture, Posture::Silent);
-        assert!(state.threat_level > 0.1);
     }
 }
