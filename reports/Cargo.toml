@@ -1,0 +1,20 @@
+[package]
+name = "reports"
+version = "0.1.0"
+edition = "2021"
+description = "Génération de rapports HTML pour CAMALEON"
+authors = ["CAMALEON Team"]
+repository = "https://github.com/servais1983/CAMALEON"
+license = "MIT"
+
+[dependencies]
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { version = "1.0" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chame_core = { path = "../chame_core" }
+formats = { path = "../formats" }
+handlebars = "4.3"
+chrono = "0.4"

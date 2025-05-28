@@ -114,7 +114,16 @@
 
 #### Phase 4 : Extensions et améliorations (3 semaines)
 1. **Support multi-formats pour l'analyse**
-   - Ajout du support pour les fichiers CSV
+   - [x] Ajout du support pour les fichiers CSV
+   - [x] Ajout du support pour les fichiers logs
+   - [x] Intégration avec le système d'événements central
+   - [ ] Tests et documentation
+
+2. **Optimisation des rapports HTML**
+   - [x] Amélioration de la lisibilité (contraste, taille de police)
+   - [x] Consolidation des résultats multi-outils
+   - [x] Système de scoring visuel
+   - [ ] Tests et documentation
    - Ajout du support pour les fichiers de logs
    - Intégration avec les modules de détection existants
 
